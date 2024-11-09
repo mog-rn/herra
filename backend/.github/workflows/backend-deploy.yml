@@ -1,0 +1,117 @@
+name: Backend deploy - GCP
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+
+env:
+  PROJECT_ID: songa-386805
+  GAR_LOCATION: us-central1
+  SERVICE: herra-backend
+  REGION: us-central1
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.10'
+          
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Docker Auth
+        run: |
+          gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
+          
+      - name: Build and Push Container
+        env:
+          FIREBASE_CREDENTIALS_FILE: ${{ secrets.FIREBASE_CREDENTIALS_FILE }}
+        run: |
+          echo "${{ secrets.FIREBASE_CREDENTIALS_FILE }}" | base64 --decode > herra-21c5a-firebase-adminsdk-hz2so-d3557f22a3.json
+          docker build -t "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" -f Dockerfile .
+          docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA"
+
+      - name: Copy Static Files from Docker Container
+        # Run the container and copy static files to GitHub Actions environment
+        run: |
+          container_id=$(docker create "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA")
+          docker cp "$container_id:/app/staticfiles" ./staticfiles
+          docker rm -v "$container_id"
+        
+      - name: Upload Static Files to Google Cloud Storage
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          echo "${{ secrets.GCP_CREDENTIALS }}" | base64 --decode > gcs-key.json
+          gcloud auth activate-service-account --key-file=gcs-key.json
+          
+          # Check if staticfiles directory exists and is not empty
+          if [ -d "staticfiles" ] && [ "$(ls -A staticfiles)" ]; then
+            gsutil -m rsync -r staticfiles/ gs://herra-static-assets/
+          else
+            echo "The staticfiles directory is empty or does not exist."
+            exit 1
+          fi
+
+      - name: Deploy to Cloud Run
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DEBUG: ${{ secrets.DEBUG }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
+          CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
+          DJANGO_SETTINGS_MODULE: config.settings
+        run: |
+          gcloud run deploy $SERVICE \
+            --image "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" \
+            --region $REGION \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars="SECRET_KEY=${SECRET_KEY},DEBUG=${DEBUG},DB_NAME=${DB_NAME},DB_USER=${DB_USER},DB_PASSWORD=${DB_PASSWORD},DB_HOST=${DB_HOST},DB_PORT=${DB_PORT},DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}"
