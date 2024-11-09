@@ -22,8 +22,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project
 COPY . .
 
-RUN chmod -R 755 /app/apps/accounts/management/commands/
-
 # Collect static files
 RUN python manage.py collectstatic --noinput
 
@@ -32,4 +30,3 @@ EXPOSE 8080
 
 # Run gunicorn with the specified number of worker processes
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8080", "--workers", "3"]
-
