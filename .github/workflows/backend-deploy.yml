@@ -47,6 +47,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
   deploy:
     needs: test
     runs-on: ubuntu-latest
@@ -65,6 +66,27 @@ jobs:
         run: |
           gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
           
+      - name: Create Entrypoint Script
+        run: |
+          cat << 'EOF' > entrypoint.sh
+          #!/bin/bash
+
+          echo "Waiting for postgres..."
+          while ! PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; do
+            echo "PostgreSQL is unavailable - sleeping"
+            sleep 1
+          done
+          echo "PostgreSQL is up - executing migrations"
+
+          echo "Running migrations..."
+          python manage.py migrate --noinput
+
+          echo "Starting Gunicorn..."
+          exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --threads 2 --timeout 0
+          EOF
+          
+          chmod +x entrypoint.sh
+          
       - name: Build and Push Container
         env:
           FIREBASE_CREDENTIALS_FILE: ${{ secrets.FIREBASE_CREDENTIALS_FILE }}
@@ -72,8 +94,8 @@ jobs:
           echo "${{ secrets.FIREBASE_CREDENTIALS_FILE }}" | base64 --decode > herra-21c5a-firebase-adminsdk-hz2so-d3557f22a3.json
           docker build -t "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" -f Dockerfile .
           docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA"
+
       - name: Copy Static Files from Docker Container
-        # Run the container and copy static files to GitHub Actions environment
         run: |
           container_id=$(docker create "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA")
           docker cp "$container_id:/app/staticfiles" ./staticfiles
@@ -86,12 +108,31 @@ jobs:
           echo "${{ secrets.GCP_CREDENTIALS }}" | base64 --decode > gcs-key.json
           gcloud auth activate-service-account --key-file=gcs-key.json
           
-          # Check if staticfiles directory exists and is not empty
           if [ -d "staticfiles" ] && [ "$(ls -A staticfiles)" ]; then
             gsutil -m rsync -r staticfiles/ gs://herra-static-assets/
           else
             echo "The staticfiles directory is empty or does not exist."
             exit 1
+          fi
+
+      - name: Clean failed revisions
+        continue-on-error: true
+        run: |
+          # Get all failed revisions (those marked with X)
+          FAILED_REVISIONS=$(gcloud run revisions list \
+            --service=$SERVICE \
+            --region=$REGION \
+            --format="value(metadata.name)" \
+            --filter="status.conditions.status!=True")
+          
+          # Delete failed revisions if any exist
+          if [ ! -z "$FAILED_REVISIONS" ]; then
+            echo "Deleting failed revisions..."
+            echo "$FAILED_REVISIONS" | while read rev; do
+              if [ "$rev" != "$(gcloud run services describe $SERVICE --region=$REGION --format='value(status.latestReadyRevisionName)')" ]; then
+                gcloud run revisions delete $rev --region=$REGION --quiet || true
+              fi
+            done
           fi
           
       - name: Deploy to Cloud Run
@@ -107,12 +148,7 @@ jobs:
           CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
           DJANGO_SETTINGS_MODULE: config.settings
         run: |
-          # Get current env vars to preserve them
-          CURRENT_ENV_VARS=$(gcloud run services describe $SERVICE \
-            --region $REGION \
-            --format='get(spec.template.spec.containers[0].env)' || echo "")
-          
-          # Deploy new revision while preserving env vars
+          # Deploy to Cloud Run with all environment variables
           gcloud run deploy $SERVICE \
             --image "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" \
             --region $REGION \
@@ -121,4 +157,32 @@ jobs:
             --memory 512Mi \
             --cpu 1 \
             --timeout 300 \
-            --set-env-vars "^--^SECRET_KEY=$SECRET_KEY,DEBUG=$DEBUG,DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE,ALLOWED_HOSTS=$ALLOWED_HOSTS,CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS"
+            --port 8080 \
+            --set-env-vars ^--^SECRET_KEY="$SECRET_KEY" \
+            --set-env-vars ^--^DEBUG="$DEBUG" \
+            --set-env-vars ^--^DB_NAME="$DB_NAME" \
+            --set-env-vars ^--^DB_USER="$DB_USER" \
+            --set-env-vars ^--^DB_PASSWORD="$DB_PASSWORD" \
+            --set-env-vars ^--^DB_HOST="$DB_HOST" \
+            --set-env-vars ^--^DB_PORT="$DB_PORT" \
+            --set-env-vars ^--^DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" \
+            --set-env-vars ^--^ALLOWED_HOSTS="$ALLOWED_HOSTS" \
+            --set-env-vars ^--^CSRF_TRUSTED_ORIGINS="$CSRF_TRUSTED_ORIGINS"
+
+      - name: Verify Deployment
+        run: |
+          echo "Verifying deployment configuration..."
+          gcloud run services describe $SERVICE \
+            --region $REGION \
+            --format='yaml(spec.template.spec.containers[0].env)'
+          
+          echo "Checking service URL..."
+          SERVICE_URL=$(gcloud run services describe $SERVICE \
+            --region $REGION \
+            --format='value(status.url)')
+          echo "Service URL: $SERVICE_URL"
+          
+          echo "Checking service status..."
+          gcloud run services describe $SERVICE \
+            --region $REGION \
+            --format='value(status.conditions)'
