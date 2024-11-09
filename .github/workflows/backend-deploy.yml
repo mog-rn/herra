@@ -118,5 +118,5 @@ jobs:
             --image "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" \
             --region $REGION \
             --command "python" \
-            --args "manage.py,create_superuser,--email=${ADMIN_EMAIL},--password=${ADMIN_PASSWORD},--first_name=${ADMIN_FIRST_NAME},--last_name=${ADMIN_LAST_NAME}" \
+            --args "manage.py,createsuperuser,--email=${ADMIN_EMAIL},--password=${ADMIN_PASSWORD},--first_name=${ADMIN_FIRST_NAME},--last_name=${ADMIN_LAST_NAME}" \
             --set-env-vars "^--^SECRET_KEY=$SECRET_KEY,DEBUG=$DEBUG,DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE,ALLOWED_HOSTS=$ALLOWED_HOSTS,CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS"
