@@ -32,3 +32,4 @@ EXPOSE 8080
 
 # Run gunicorn with the specified number of worker processes
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8080", "--workers", "3"]
+
