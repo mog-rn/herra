@@ -33,7 +33,9 @@ DEBUG = os.getenv('DEBUG', 'False') == 'True'
 CSRF_COOKIE_SECURE = not DEBUG  
 SESSION_COOKIE_SECURE = not DEBUG 
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',') + [
+    '.run.app',  # Allows all Cloud Run URLs
+]
 
 FIREBASE_CREDENTIALS_FILE = os.getenv('FIREBASE_CREDENTIALS_FILE')
 
