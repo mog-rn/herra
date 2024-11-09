@@ -5,4 +5,5 @@ urlpatterns = [
     path('profile/', views.profile, name='profile'),
     path('sync/', views.sync_user, name='sync_user'),
     path('test-token/', views.test_auth, name='test_firebase_token'),
+    path('admin/create/', views.create_superuser, name='create-superuser'),
 ]

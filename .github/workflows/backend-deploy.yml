@@ -106,14 +106,27 @@ jobs:
             --allow-unauthenticated \
             --timeout 300 \
             --set-env-vars "^--^SECRET_KEY=$SECRET_KEY,DEBUG=$DEBUG,DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE,ALLOWED_HOSTS=$ALLOWED_HOSTS,CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS"
+  
 
-      - name: Create Admin User
-        if: github.ref == 'refs/heads/main'
+  create-superuser:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Google Auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+
+      - name: Wait for service to be ready
+        run: sleep 30  # Give the service time to start up
+
+      - name: Create Superuser using Django command
         env:
           ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
-          ADMIN_FIRST_NAME: ${{ secrets.ADMIN_FIRST_NAME }}
-          ADMIN_LAST_NAME: ${{ secrets.ADMIN_LAST_NAME }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
           DEBUG: ${{ secrets.DEBUG }}
           DB_NAME: ${{ secrets.DB_NAME }}
@@ -121,13 +134,16 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
-          ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
-          CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
           DJANGO_SETTINGS_MODULE: config.settings
         run: |
-          gcloud run deploy $SERVICE \
-            --image "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" \
-            --region $REGION \
-            --command "python" \
-            --args "manage.py,init_admin,--email=${ADMIN_EMAIL},--password=${ADMIN_PASSWORD},--first_name=${ADMIN_FIRST_NAME},--last_name=${ADMIN_LAST_NAME}" \
-            --set-env-vars "^--^SECRET_KEY=$SECRET_KEY,DEBUG=$DEBUG,DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE,ALLOWED_HOSTS=$ALLOWED_HOSTS,CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS"
+          # Get the service URL
+          SERVICE_URL=$(gcloud run services describe $SERVICE --region $REGION --format='value(status.url)')
+          
+          # Create superuser using curl to hit a management endpoint
+          curl -X POST "$SERVICE_URL/api/admin/create/" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "email": "$ADMIN_EMAIL",
+              "password": "$ADMIN_PASSWORD",
+              "secret_key": "$SECRET_KEY"
+            }'

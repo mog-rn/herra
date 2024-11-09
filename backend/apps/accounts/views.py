@@ -1,12 +1,14 @@
+# backend/apps/accounts/views.py
 from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 from firebase_admin import auth as firebase_auth
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.response import Response
 
 from apps.accounts.services.firebase_backend import FirebaseAuthentication
-
 from .models import CustomUser
 import logging
 from functools import wraps
@@ -50,16 +52,13 @@ def profile(request):
             'uid': firebase_user['uid'],
             'email': firebase_user.get('email'),
             'email_verified': firebase_user.get('email_verified', False),
-            # Add any additional fields you want to return
         }
         
-        # If you're using CustomUser model, you can fetch additional data
         try:
             custom_user = CustomUser.objects.get(firebase_uid=firebase_user['uid'])
             user_data.update({
                 'first_name': custom_user.first_name,
                 'last_name': custom_user.last_name,
-                # Add other custom fields
             })
         except CustomUser.DoesNotExist:
             logger.warning(f"CustomUser not found for Firebase UID: {firebase_user['uid']}")
@@ -74,6 +73,7 @@ def profile(request):
 @authentication_classes([FirebaseAuthentication])
 @permission_classes([IsAuthenticated])
 def sync_user(request):
+    """Synchronize user data with Firebase"""
     logger.info("Processing sync_user request")
     
     if not hasattr(request, '_firebase_user') or not request._firebase_user:
@@ -96,10 +96,54 @@ def sync_user(request):
     except Exception as e:
         logger.error(f"Sync failed: {str(e)}")
         return JsonResponse({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_superuser(request):
+    """Create a superuser via API endpoint"""
+    # Verify secret key to ensure this is a legitimate request
+    if request.data.get('secret_key') != settings.SECRET_KEY:
+        logger.error("Unauthorized superuser creation attempt")
+        return Response({'error': 'Unauthorized'}, status=401)
     
+    try:
+        email = request.data.get('email')
+        password = request.data.get('password')
+        first_name = request.data.get('first_name', '')
+        last_name = request.data.get('last_name', '')
+        
+        if not email or not password:
+            return Response({'error': 'Email and password are required'}, status=400)
+            
+        # Check if user exists
+        if CustomUser.objects.filter(email=email).exists():
+            logger.info(f"Superuser with email {email} already exists")
+            return Response({'message': 'User already exists'}, status=200)
+            
+        # Create superuser
+        superuser = CustomUser.objects.create_superuser(
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+            is_active=True
+        )
+        logger.info(f"Superuser created successfully: {email}")
+        return Response({
+            'message': 'Superuser created successfully',
+            'email': superuser.email,
+            'id': superuser.id
+        }, status=201)
+        
+    except Exception as e:
+        logger.error(f"Superuser creation failed: {str(e)}")
+        return Response({'error': str(e)}, status=400)
+
 @api_view(['GET'])
 @authentication_classes([FirebaseAuthentication])
+@permission_classes([IsAuthenticated])
 def test_auth(request):
+    """Test authentication endpoint"""
     return JsonResponse({
         'authenticated': request.user.is_authenticated,
         'user_id': getattr(request.user, 'id', None),
