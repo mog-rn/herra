@@ -93,6 +93,7 @@ jobs:
             echo "The staticfiles directory is empty or does not exist."
             exit 1
           fi
+          
       - name: Deploy to Cloud Run
         env:
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
@@ -106,9 +107,18 @@ jobs:
           CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
           DJANGO_SETTINGS_MODULE: config.settings
         run: |
+          # Get current env vars to preserve them
+          CURRENT_ENV_VARS=$(gcloud run services describe $SERVICE \
+            --region $REGION \
+            --format='get(spec.template.spec.containers[0].env)' || echo "")
+          
+          # Deploy new revision while preserving env vars
           gcloud run deploy $SERVICE \
             --image "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" \
             --region $REGION \
             --platform managed \
             --allow-unauthenticated \
-            --set-env-vars="SECRET_KEY=${SECRET_KEY},DEBUG=${DEBUG},DB_NAME=${DB_NAME},DB_USER=${DB_USER},DB_PASSWORD=${DB_PASSWORD},DB_HOST=${DB_HOST},DB_PORT=${DB_PORT},DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS_MODULE}"
+            --memory 512Mi \
+            --cpu 1 \
+            --timeout 300 \
+            --set-env-vars "^--^SECRET_KEY=$SECRET_KEY,DEBUG=$DEBUG,DB_NAME=$DB_NAME,DB_USER=$DB_USER,DB_PASSWORD=$DB_PASSWORD,DB_HOST=$DB_HOST,DB_PORT=$DB_PORT,DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE,ALLOWED_HOSTS=$ALLOWED_HOSTS,CSRF_TRUSTED_ORIGINS=$CSRF_TRUSTED_ORIGINS"
