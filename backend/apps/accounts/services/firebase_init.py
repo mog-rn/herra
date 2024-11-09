@@ -17,7 +17,7 @@ def initialize_firebase():
             service_account_path = os.path.join(
                 settings.BASE_DIR,
                 # 'accounts',
-                'shield-her-e8fe5-firebase-adminsdk-h12gc-7bc8ee4192.json'
+                'herra-21c5a-firebase-adminsdk-hz2so-d3557f22a3.json'
             )
             
             if not os.path.exists(service_account_path):

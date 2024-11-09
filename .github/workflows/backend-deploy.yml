@@ -146,6 +146,8 @@ jobs:
           DB_PORT: ${{ secrets.DB_PORT }}
           ALLOWED_HOSTS: ${{ secrets.ALLOWED_HOSTS }}
           CSRF_TRUSTED_ORIGINS: ${{ secrets.CSRF_TRUSTED_ORIGINS }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          DEFAULT_FROM_EMAIL: ${{ secrets.DEFAULT_FROM_EMAIL }}
           DJANGO_SETTINGS_MODULE: config.settings
         run: |
           # Deploy to Cloud Run with all environment variables
