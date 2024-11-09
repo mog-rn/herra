@@ -6,11 +6,11 @@ from drf_yasg import openapi
 
 schema_view = get_schema_view(
    openapi.Info(
-      title="Safe Haven API",
+      title="Herra API",
       default_version='v1',
-      description="API documentation for Safe Haven",
-      terms_of_service="https://www.google.com/policies/terms/",
-      contact=openapi.Contact(email="contact@safehaven.local"),
+      description="API documentation for Herra",
+      terms_of_service="",
+      contact=openapi.Contact(email=""),
       license=openapi.License(name="BSD License"),
    ),
    public=True,

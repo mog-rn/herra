@@ -25,6 +25,13 @@ AUTHENTICATION_BACKENDS = [
     'apps.accounts.services.firebase_backend.FirebaseAuthentication',
 ]
 
+REDOC_SETTINGS = {
+    'LAZY_RENDERING': False,
+    'NATIVE_SCROLLBARS': False,
+    'REQUIRED_PROPS_FIRST': True,
+    'EXPAND_RESPONSES': '200,201',
+}
+
 SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
