@@ -22,6 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project
 COPY . .
 
+RUN chmod -R 755 /app/apps/accounts/management/commands/
+
 # Collect static files
 RUN python manage.py collectstatic --noinput
 

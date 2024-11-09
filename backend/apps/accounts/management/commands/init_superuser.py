@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class Command(BaseCommand):
-    help = 'Create a superuser non-interactively'
+    help = 'Creates a superuser account non-interactively'
 
     def add_arguments(self, parser):
         parser.add_argument('--email', required=True)
@@ -12,21 +12,20 @@ class Command(BaseCommand):
         parser.add_argument('--first_name')
         parser.add_argument('--last_name')
 
-    def handle(self, *args, **kwargs):
-        email = kwargs['email']
-        password = kwargs['password']
-        first_name = kwargs.get('first_name', '')
-        last_name = kwargs.get('last_name', '')
+    def handle(self, *args, **options):
+        email = options['email']
+        password = options['password']
+        first_name = options.get('first_name', '')
+        last_name = options.get('last_name', '')
 
-        try:
-            user = User.objects.get(email=email)
-            self.stdout.write(self.style.WARNING(f'User {email} already exists'))
-        except User.DoesNotExist:
+        if not User.objects.filter(email=email).exists():
+            self.stdout.write(f'Creating superuser for {email}')
             User.objects.create_superuser(
                 email=email,
                 password=password,
                 first_name=first_name,
-                last_name=last_name,
-                is_active=True
+                last_name=last_name
             )
             self.stdout.write(self.style.SUCCESS(f'Superuser {email} created successfully'))
+        else:
+            self.stdout.write(self.style.WARNING(f'User {email} already exists'))
