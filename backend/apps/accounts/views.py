@@ -98,28 +98,16 @@ def sync_user(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([AllowAny])  # Allow anyone to access
+@csrf_exempt  # Disable CSRF protection
 def create_superuser(request):
-    """Create a superuser via API endpoint"""
-    # Verify secret key to ensure this is a legitimate request
-    if request.data.get('secret_key') != settings.SECRET_KEY:
-        logger.error("Unauthorized superuser creation attempt")
-        return Response({'error': 'Unauthorized'}, status=401)
-    
+    """Create a superuser via API endpoint with no restrictions"""
     try:
         email = request.data.get('email')
         password = request.data.get('password')
         first_name = request.data.get('first_name', '')
         last_name = request.data.get('last_name', '')
         
-        if not email or not password:
-            return Response({'error': 'Email and password are required'}, status=400)
-            
-        # Check if user exists
-        if CustomUser.objects.filter(email=email).exists():
-            logger.info(f"Superuser with email {email} already exists")
-            return Response({'message': 'User already exists'}, status=200)
-            
         # Create superuser
         superuser = CustomUser.objects.create_superuser(
             email=email,
@@ -128,7 +116,7 @@ def create_superuser(request):
             last_name=last_name,
             is_active=True
         )
-        logger.info(f"Superuser created successfully: {email}")
+        
         return Response({
             'message': 'Superuser created successfully',
             'email': superuser.email,
@@ -138,7 +126,7 @@ def create_superuser(request):
     except Exception as e:
         logger.error(f"Superuser creation failed: {str(e)}")
         return Response({'error': str(e)}, status=400)
-
+    
 @api_view(['GET'])
 @authentication_classes([FirebaseAuthentication])
 @permission_classes([IsAuthenticated])
