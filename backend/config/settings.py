@@ -119,6 +119,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_yasg',
     'storages',
+    'cycle_tracking',
 
     # Local apps
     'apps.accounts.apps.AccountsConfig',
