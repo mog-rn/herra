@@ -128,18 +128,23 @@ else:
     GEOS_LIBRARY_PATH = os.getenv('GEOS_LIBRARY_PATH', '/usr/lib/libgeos_c.so')
 
 # Static files configuration
-STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 if DEBUG:
-    STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+    STATIC_URL = '/static/'
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
 else:
     GS_BUCKET_NAME = os.getenv('GS_BUCKET_NAME', 'herra-static-assets')
+    GS_DEFAULT_ACL = 'publicRead'
+    GS_CACHE_CONTROL = 'public, max-age=86400'
+    GS_FILE_OVERWRITE = True
+    
     STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/'
     STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    GS_DEFAULT_ACL = 'publicRead'
-    GS_CACHE_CONTROL = 'public, max-age=86400'  # 24 hours cache
+    DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
 
 # Media files configuration
 MEDIA_URL = '/media/'
@@ -185,6 +190,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Security Settings
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost').split(',') + ['.run.app']
+
+# HTTPS/SSL Settings
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'localhost').split(',')
@@ -297,22 +309,30 @@ CACHES = {
     }
 }
 
-# Session Settings
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
-
 # Messages Settings
 MESSAGE_STORAGE = 'django.contrib.messages.storage.session.SessionStorage'
 
-# Additional Security Headers
+# Security Headers - Update for Cloud Run
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-SECURE_HSTS_SECONDS = 31536000  # 1 year
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+
+LOGGING['formatters']['cloud_run'] = {
+    'format': '%(levelname)s %(asctime)s [%(name)s] %(message)s',
+}
+LOGGING['handlers']['cloud_run'] = {
+    'class': 'logging.StreamHandler',
+    'formatter': 'cloud_run',
+}
+LOGGING['loggers']['django']['handlers'].append('cloud_run')
+
+# Session Settings - Update for Cloud Run
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_NAME = '__Secure-sessionid' if not DEBUG else 'sessionid'
