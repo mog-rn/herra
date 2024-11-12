@@ -73,13 +73,29 @@ jobs:
           echo "${{ secrets.FIREBASE_CREDENTIALS_FILE }}" | base64 --decode > herra-21c5a-firebase-adminsdk-hz2so-d3557f22a3.json
           docker build -t "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA" -f Dockerfile .
           docker push "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA"
+      
+      - name: Debug Static Files
+        run: |
+          echo "Current directory contents:"
+          ls -la
+          echo "\nStatic directory contents:"
+          ls -la static/ || echo "No static directory"
+          echo "\nStaticfiles directory contents:"
+          ls -la staticfiles/ || echo "No staticfiles directory"
 
       - name: Copy Static Files from Docker Container
         run: |
+          # Create local staticfiles directory
+          mkdir -p staticfiles
+          
+          # Get container ID and copy files
           container_id=$(docker create "$GAR_LOCATION-docker.pkg.dev/$PROJECT_ID/$SERVICE/$SERVICE:$GITHUB_SHA")
-          docker cp "$container_id:/app/staticfiles" ./staticfiles
+          docker cp "$container_id:/app/staticfiles/." ./staticfiles/
           docker rm -v "$container_id"
-        
+          
+          echo "Staticfiles directory contents after copy:"
+          ls -la staticfiles/
+      
       - name: Upload Static Files to Google Cloud Storage
         env:
           GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}

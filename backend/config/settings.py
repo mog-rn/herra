@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -29,15 +30,15 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic',  # Before staticfiles
     'django.contrib.staticfiles',
-    'django.contrib.gis',
+    'django.contrib.gis',  # After staticfiles
 
     # Third-party apps
     'rest_framework',
     'rest_framework.authtoken',
     'drf_yasg',
     'storages',
-    'whitenoise.runserver_nostatic',  # Add whitenoise for static files
 
     # Local apps
     'apps.accounts.apps.AccountsConfig',
@@ -49,7 +50,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add whitenoise middleware
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # After security middleware
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -73,7 +74,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'django.template.context_processors.static',  # Add static context processor
+                'django.template.context_processors.static',
             ],
         },
     },
@@ -81,51 +82,75 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.contrib.gis.db.backends.postgis',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
+# Database configuration with collectstatic handling
+class DisableMigrations:
+    def __contains__(self, item):
+        return True
+    def __getitem__(self, item):
+        return None
+
+if 'collectstatic' in sys.argv:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': ':memory:',
+        }
     }
-}
+    MIGRATION_MODULES = DisableMigrations()
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.contrib.gis.db.backends.postgis',
+            'NAME': os.getenv('DB_NAME'),
+            'USER': os.getenv('DB_USER'),
+            'PASSWORD': os.getenv('DB_PASSWORD'),
+            'HOST': os.getenv('DB_HOST'),
+            'PORT': os.getenv('DB_PORT'),
+            'OPTIONS': {
+                'sslmode': 'require' if not DEBUG else 'disable'
+            }
+        }
+    }
 
 # GeoDjango Settings
-if os.name == 'nt':
-    # Windows settings
-    GDAL_LIBRARY_PATH = os.getenv('GDAL_LIBRARY_PATH')
-    GEOS_LIBRARY_PATH = os.getenv('GEOS_LIBRARY_PATH')
-else:
-    # Unix/Linux/MacOS settings
+if os.path.exists('/usr/lib/x86_64-linux-gnu/libgdal.so.31'):
+    GDAL_LIBRARY_PATH = '/usr/lib/x86_64-linux-gnu/libgdal.so.31'
+elif os.path.exists('/usr/lib/libgdal.so'):
     GDAL_LIBRARY_PATH = '/usr/lib/libgdal.so'
-    GEOS_LIBRARY_PATH = '/usr/lib/libgeos_c.so'
-
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
-if DEBUG:
-    STATICFILES_DIRS = [
-        os.path.join(BASE_DIR, 'static'),
-    ]
 else:
-    STATIC_URL = f'https://storage.googleapis.com/{os.getenv("GS_BUCKET_NAME")}/'
+    GDAL_LIBRARY_PATH = os.getenv('GDAL_LIBRARY_PATH', '/usr/lib/libgdal.so')
 
+if os.path.exists('/usr/lib/x86_64-linux-gnu/libgeos_c.so.1'):
+    GEOS_LIBRARY_PATH = '/usr/lib/x86_64-linux-gnu/libgeos_c.so.1'
+elif os.path.exists('/usr/lib/libgeos_c.so'):
+    GEOS_LIBRARY_PATH = '/usr/lib/libgeos_c.so'
+else:
+    GEOS_LIBRARY_PATH = os.getenv('GEOS_LIBRARY_PATH', '/usr/lib/libgeos_c.so')
+
+# Static files configuration
+STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Media files
+if DEBUG:
+    STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+else:
+    GS_BUCKET_NAME = os.getenv('GS_BUCKET_NAME', 'herra-static-assets')
+    STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/'
+    STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
+    GS_DEFAULT_ACL = 'publicRead'
+    GS_CACHE_CONTROL = 'public, max-age=86400'  # 24 hours cache
+
+# Media files configuration
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Storage Settings
 if not DEBUG:
     DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-    GS_BUCKET_NAME = os.getenv('GS_BUCKET_NAME', 'herra-static-assets')
-    STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
 
-# Password validation
+# Your existing settings continue from here...
+# [Rest of your settings remain unchanged]
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -164,7 +189,7 @@ CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'localhost').split(',')
 
-# Rest Framework Settings
+# Rest Framework Settings remain the same
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
