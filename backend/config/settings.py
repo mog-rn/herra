@@ -19,6 +19,8 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+
 # Application definition
 INSTALLED_APPS = [
     # Django apps
@@ -41,6 +43,7 @@ INSTALLED_APPS = [
     'cycle_tracking',
     'safety',
     'recommendations',
+    'core',
 ]
 
 MIDDLEWARE = [

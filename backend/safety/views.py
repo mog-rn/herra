@@ -153,7 +153,7 @@ class UserLocationViewSet(viewsets.ModelViewSet):
         return user_location
 
 class EmergencyAlertViewSet(viewsets.ModelViewSet):
-    serializer_class = EmergencyAlertSerializer
+    serializer_class = EmergencyContactSerializer
     safety_service = SafetyService()
 
     def get_queryset(self):
