@@ -65,28 +65,7 @@ jobs:
       - name: Docker Auth
         run: |
           gcloud auth configure-docker $GAR_LOCATION-docker.pkg.dev
-          
-      - name: Create Entrypoint Script
-        run: |
-          cat << 'EOF' > entrypoint.sh
-          #!/bin/bash
-
-          echo "Waiting for postgres..."
-          while ! PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c '\q' 2>/dev/null; do
-            echo "PostgreSQL is unavailable - sleeping"
-            sleep 1
-          done
-          echo "PostgreSQL is up - executing migrations"
-
-          echo "Running migrations..."
-          python manage.py migrate --noinput
-
-          echo "Starting Gunicorn..."
-          exec gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --threads 2 --timeout 0
-          EOF
-          
-          chmod +x entrypoint.sh
-          
+              
       - name: Build and Push Container
         env:
           FIREBASE_CREDENTIALS_FILE: ${{ secrets.FIREBASE_CREDENTIALS_FILE }}
