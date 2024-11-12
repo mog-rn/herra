@@ -9,13 +9,20 @@ ENV PORT 8080
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including GDAL and GEOS
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
     postgresql-client \
     netcat-traditional \
+    gdal-bin \
+    libgdal-dev \
+    libgeos-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Set GDAL and GEOS environment variables
+ENV GDAL_LIBRARY_PATH=/usr/lib/libgdal.so
+ENV GEOS_LIBRARY_PATH=/usr/lib/libgeos_c.so
 
 # Install Python dependencies
 COPY requirements.txt .
