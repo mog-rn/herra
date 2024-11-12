@@ -129,8 +129,6 @@ else:
 
 # Static files configuration
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 if DEBUG:
     STATIC_URL = '/static/'
@@ -141,7 +139,7 @@ else:
     GS_DEFAULT_ACL = 'publicRead'
     GS_CACHE_CONTROL = 'public, max-age=86400'
     GS_FILE_OVERWRITE = True
-    
+
     STATIC_URL = f'https://storage.googleapis.com/{GS_BUCKET_NAME}/'
     STATICFILES_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
     DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
@@ -152,24 +150,6 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 if not DEBUG:
     DEFAULT_FILE_STORAGE = 'storages.backends.gcloud.GoogleCloudStorage'
-
-# Your existing settings continue from here...
-# [Rest of your settings remain unchanged]
-
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-    },
-    {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-    },
-]
 
 # Authentication
 AUTH_USER_MODEL = 'accounts.CustomUser'
@@ -201,7 +181,7 @@ CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_TRUSTED_ORIGINS = os.getenv('CSRF_TRUSTED_ORIGINS', 'localhost').split(',')
 
-# Rest Framework Settings remain the same
+# Rest Framework Settings
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -211,10 +191,14 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
-    'DEFAULT_RENDERER_CLASSES': [
-        'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer' if DEBUG else None,
-    ],
+    'DEFAULT_RENDERER_CLASSES': (
+        [
+            'rest_framework.renderers.JSONRenderer',
+            'rest_framework.renderers.BrowsableAPIRenderer',
+        ] if DEBUG else [
+            'rest_framework.renderers.JSONRenderer',
+        ]
+    ),
 }
 
 # Swagger Settings
@@ -245,12 +229,19 @@ LOGGING = {
             'format': '[{levelname}] {asctime} {message}',
             'style': '{',
         },
+        'cloud_run': {
+            'format': '%(levelname)s %(asctime)s [%(name)s] %(message)s',
+        },
     },
     'handlers': {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
+        },
+        'cloud_run': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'cloud_run',
         },
         'file': {
             'level': 'INFO',
@@ -279,12 +270,12 @@ LOGGING = {
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'file', 'cloud_run'],
             'level': 'INFO',
             'propagate': True,
         },
         'django.server': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console', 'file', 'cloud_run'],
             'level': 'INFO',
             'propagate': False,
         },
@@ -322,17 +313,24 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = True
     SECURE_REFERRER_POLICY = 'same-origin'
 
-LOGGING['formatters']['cloud_run'] = {
-    'format': '%(levelname)s %(asctime)s [%(name)s] %(message)s',
-}
-LOGGING['handlers']['cloud_run'] = {
-    'class': 'logging.StreamHandler',
-    'formatter': 'cloud_run',
-}
-LOGGING['loggers']['django']['handlers'].append('cloud_run')
-
 # Session Settings - Update for Cloud Run
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_NAME = '__Secure-sessionid' if not DEBUG else 'sessionid'
+
+# Password validation
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
