@@ -13,12 +13,15 @@ from .models import (
     UserLocation,
     JourneyTracking,
     EmergencyAlert,
-    AlertType
+    AlertType,
+    AlertStatus
 )
 from .serializers import (
     EmergencyContactSerializer,
     SafeLocationSerializer,
-    UserLocationSerializer
+    UserLocationSerializer,
+    JourneyTrackingSerializer,
+    EmergencyAlertSerializer
 )
 from .services import GeocodeService, SafetyService
 
@@ -41,8 +44,8 @@ class EmergencyContactViewSet(viewsets.ModelViewSet):
             EmergencyContact.objects.filter(
                 user=self.request.user,
                 is_primary=True
-            ).update(is_primary=False)
-            
+            ).exclude(pk=self.kwargs.get('pk')).update(is_primary=False)
+        
         if serializer.validated_data.get('address'):
             point, formatted_address = self.geocode_service.geocode_address(
                 serializer.validated_data['address']
@@ -59,6 +62,8 @@ class EmergencyContactViewSet(viewsets.ModelViewSet):
             serializer.save(user=self.request.user)
 
 class SafeLocationViewSet(viewsets.ModelViewSet):
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = SafeLocationSerializer
     geocode_service = GeocodeService()
 
@@ -81,7 +86,19 @@ class SafeLocationViewSet(viewsets.ModelViewSet):
             else:
                 serializer.save(user=self.request.user)
         else:
-            serializer.save(user=self.request.user)
+            lat = serializer.validated_data.pop('latitude', None)
+            lon = serializer.validated_data.pop('longitude', None)
+            if lat is not None and lon is not None:
+                point = Point(lon, lat, srid=4326)
+                serializer.save(
+                    user=self.request.user,
+                    location=point
+                )
+            else:
+                return Response(
+                    {'error': 'Either address or latitude and longitude must be provided'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
     @action(detail=False, methods=['get'])
     def nearby(self, request):
@@ -91,7 +108,7 @@ class SafeLocationViewSet(viewsets.ModelViewSet):
             lon = float(request.query_params.get('longitude'))
             radius = float(request.query_params.get('radius', 5000))  # Default 5km
             
-            user_location = Point(lon, lat)
+            user_location = Point(lon, lat, srid=4326)
             
             nearby_locations = SafeLocation.objects.filter(
                 user=request.user,
@@ -111,6 +128,8 @@ class SafeLocationViewSet(viewsets.ModelViewSet):
             )
 
 class UserLocationViewSet(viewsets.ModelViewSet):
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = UserLocationSerializer
     geocode_service = GeocodeService()
     safety_service = SafetyService()
@@ -119,46 +138,50 @@ class UserLocationViewSet(viewsets.ModelViewSet):
         return UserLocation.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
-        # Get the location point
-        location = Point(
-            float(self.request.data.get('longitude')),
-            float(self.request.data.get('latitude'))
-        )
-        
-        # Reverse geocode to get address
-        address = self.geocode_service.reverse_geocode(
-            float(self.request.data.get('latitude')),
-            float(self.request.data.get('longitude'))
-        )
-        
-        # Save location
-        user_location = serializer.save(
-            user=self.request.user,
-            location=location,
-            address=address
-        )
-        
-        # Check if user is in safe zone
-        is_safe, safe_location = self.safety_service.check_safe_zones(
-            self.request.user,
-            location
-        )
-        
-        # Check active journeys
-        active_journey = JourneyTracking.objects.filter(
-            user=self.request.user,
-            is_active=True
-        ).first()
-        
-        if active_journey:
-            active_journey.current_location = location
-            active_journey.save()
-            self.safety_service.track_journey(active_journey)
+        try:
+            # Get the location point with SRID
+            lat = float(self.request.data.get('latitude'))
+            lon = float(self.request.data.get('longitude'))
+            location = Point(lon, lat, srid=4326)
+            
+            # Reverse geocode to get address
+            address = self.geocode_service.reverse_geocode(lat, lon)
+            
+            # Save location
+            user_location = serializer.save(
+                user=self.request.user,
+                location=location,
+                address=address
+            )
+            
+            # Check if user is in safe zone
+            is_safe, safe_location = self.safety_service.check_safe_zones(
+                self.request.user,
+                location
+            )
+            
+            # Check active journeys
+            active_journey = JourneyTracking.objects.filter(
+                user=self.request.user,
+                is_active=True
+            ).first()
+            
+            if active_journey:
+                active_journey.current_location = location
+                active_journey.save()
+                self.safety_service.track_journey(active_journey)
 
-        return user_location
+            return user_location
+        except (ValueError, TypeError):
+            return Response(
+                {'error': 'Invalid latitude or longitude provided'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class EmergencyAlertViewSet(viewsets.ModelViewSet):
-    serializer_class = EmergencyContactSerializer
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmergencyAlertSerializer
     safety_service = SafetyService()
 
     def get_queryset(self):
@@ -168,9 +191,14 @@ class EmergencyAlertViewSet(viewsets.ModelViewSet):
     def trigger(self, request):
         """Trigger emergency alert (disguised as wellness timer)"""
         try:
-            lat = float(request.data.get('latitude'))
-            lon = float(request.data.get('longitude'))
-            location = Point(lon, lat)
+            lat = request.data.get('latitude')
+            lon = request.data.get('longitude')
+            if lat is not None and lon is not None:
+                lat = float(lat)
+                lon = float(lon)
+                location = Point(lon, lat, srid=4326)
+            else:
+                location = None  # Location is optional
             
             alert = EmergencyAlert.objects.create(
                 user=request.user,
@@ -207,4 +235,3 @@ class EmergencyAlertViewSet(viewsets.ModelViewSet):
             "message": "Timer stopped",
             "session_completed": False
         })
-        
