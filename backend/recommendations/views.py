@@ -1,12 +1,16 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from apps.accounts.services.firebase_backend import FirebaseAuthentication
 from cycle_tracking.models import CycleTracking
 from .models import Recommendation
 from .serializers import RecommendationSerializer, RecommendationFeedbackSerializer
 from .services import GeminiService
+from rest_framework.permissions import IsAuthenticated
 
 class RecommendationViewSet(viewsets.ReadOnlyModelViewSet):
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = RecommendationSerializer
     gemini_service = GeminiService()
 

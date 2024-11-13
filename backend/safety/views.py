@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from django.contrib.gis.geos import Point
 from django.contrib.gis.db.models.functions import Distance
 from django.contrib.gis.measure import D
+from rest_framework.permissions import IsAuthenticated
+
+from apps.accounts.services.firebase_backend import FirebaseAuthentication
 from .models import (
     EmergencyContact,
     SafeLocation,
@@ -20,6 +23,8 @@ from .serializers import (
 from .services import GeocodeService, SafetyService
 
 class EmergencyContactViewSet(viewsets.ModelViewSet):
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
     serializer_class = EmergencyContactSerializer
     geocode_service = GeocodeService()
 

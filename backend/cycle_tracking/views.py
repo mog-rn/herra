@@ -2,6 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
+from rest_framework.permissions import IsAuthenticated
+
+from apps.accounts.services.firebase_backend import FirebaseAuthentication
 from .models import CycleTracking
 from .serializers import (
     CycleTrackingSerializer,
@@ -10,7 +13,13 @@ from .serializers import (
 )
 from .services import CycleService
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class CycleTrackingViewSet(viewsets.ModelViewSet):
+    authentication_classes = [FirebaseAuthentication]
+    permission_classes = [IsAuthenticated]
     filter_backends = [filters.DjangoFilterBackend]
     filterset_fields = ['start_date', 'current_phase']
     ordering_fields = ['start_date', 'cycle_length']
@@ -20,6 +29,8 @@ class CycleTrackingViewSet(viewsets.ModelViewSet):
         self.cycle_service = CycleService()
 
     def get_queryset(self):
+        logger.debug(f"Request headers: {self.request.headers}")
+        logger.debug(f"Auth header: {self.request.headers.get('Authorization')}")
         return CycleTracking.objects.filter(
             user=self.request.user,
             is_active=True
