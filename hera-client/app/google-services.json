@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1048434413410",
+    "project_id": "herra-21c5a",
+    "storage_bucket": "herra-21c5a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1048434413410:android:3a33615c9a70c5e108663b",
+        "android_client_info": {
+          "package_name": "com.herra_org.heraclient"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAEtffGJEdRwa2tOZJm50UhA5l3eV0W2wc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
