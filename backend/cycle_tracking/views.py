@@ -31,13 +31,6 @@ class CycleTrackingViewSet(viewsets.ModelViewSet):
         super().__init__(*args, **kwargs)
         self.cycle_service = CycleService()
 
-        if not hasattr(self.response, 'accepted_renderer'):
-                self.response.accepted_renderer = JSONRenderer()
-                self.response.accepted_media_type = "application/json"
-                self.response.renderer_context = {}
-                
-        return self.response
-
     def get_queryset(self):
         logger.debug(f"Request headers: {self.request.headers}")
         logger.debug(f"Auth header: {self.request.headers.get('Authorization')}")
