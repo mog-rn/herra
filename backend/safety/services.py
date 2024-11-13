@@ -4,7 +4,10 @@ from django.contrib.gis.db.models.functions import Distance
 from django.conf import settings
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
-import requests
+from .models import SafeLocation, EmergencyAlert, AlertType, AlertStatus, JourneyTracking
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GeocodeService:
     def __init__(self):
@@ -17,7 +20,7 @@ class GeocodeService:
                 return Point(location.longitude, location.latitude), location.address
             return None, None
         except Exception as e:
-            print(f"Geocoding error: {str(e)}")
+            logger.error(f"Geocoding error: {str(e)}")
             return None, None
 
     def reverse_geocode(self, latitude, longitude):
@@ -25,7 +28,7 @@ class GeocodeService:
             location = self.geolocator.reverse((latitude, longitude))
             return location.address if location else None
         except Exception as e:
-            print(f"Reverse geocoding error: {str(e)}")
+            logger.error(f"Reverse geocoding error: {str(e)}")
             return None
 
 class SafetyService:
@@ -58,7 +61,7 @@ class SafetyService:
         """Update journey tracking and check for safety"""
         current_location = journey.current_location
         destination = journey.destination
-        
+
         # Calculate distance to destination
         distance_to_dest = geodesic(
             (current_location.y, current_location.x),
@@ -79,4 +82,11 @@ class SafetyService:
             journey=journey,
             message="Journey deviation detected"
         )
-        
+        logger.info(f"Journey alert triggered for user {journey.user.username}")
+
+    def trigger_emergency_alert(self, alert):
+        """Handle the process of notifying emergency contacts"""
+        # This method would include logic to send notifications to emergency contacts
+        # For example, sending SMS or emails
+        logger.info(f"Emergency alert triggered for user {alert.user.username}")
+        # Implement notification logic here

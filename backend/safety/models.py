@@ -3,11 +3,13 @@ from django.contrib.gis.geos import Point
 from django.conf import settings
 from django.core.validators import RegexValidator
 
+# Phone number validator
 phone_regex = RegexValidator(
     regex=r'^\+?1?\d{9,15}$',
     message="Phone number must be in format: '+999999999'. Up to 15 digits."
 )
 
+# Enum classes for choices
 class ContactType(models.TextChoices):
     EMERGENCY = 'emergency', 'Emergency Contact'
     WELLNESS = 'wellness', 'Wellness Coach'  # Disguised authority contact
@@ -25,6 +27,7 @@ class AlertStatus(models.TextChoices):
     RECEIVED = 'received', 'Received'
     RESPONDED = 'responded', 'Responded'
 
+# Models
 class EmergencyContact(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -64,6 +67,9 @@ class EmergencyContact(models.Model):
             ).exclude(pk=self.pk).update(is_primary=False)
         super().save(*args, **kwargs)
 
+    def __str__(self):
+        return f"{self.name} ({self.user.username})"
+
 class SafeLocation(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -89,6 +95,9 @@ class SafeLocation(models.Model):
             models.Index(fields=['user', 'is_active']),
         ]
 
+    def __str__(self):
+        return f"{self.name} ({self.user.username})"
+
 class UserLocation(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -107,6 +116,9 @@ class UserLocation(models.Model):
             models.Index(fields=['user', 'timestamp']),
         ]
         ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Location of {self.user.username} at {self.timestamp}"
 
 class JourneyTracking(models.Model):
     user = models.ForeignKey(
@@ -131,6 +143,9 @@ class JourneyTracking(models.Model):
         indexes = [
             models.Index(fields=['user', 'is_active']),
         ]
+
+    def __str__(self):
+        return f"Journey of {self.user.username} started at {self.start_time}"
 
 class EmergencyAlert(models.Model):
     user = models.ForeignKey(
@@ -167,4 +182,6 @@ class EmergencyAlert(models.Model):
             models.Index(fields=['user', 'created_at']),
             models.Index(fields=['status']),
         ]
-        
+
+    def __str__(self):
+        return f"Alert ({self.alert_type}) for {self.user.username} at {self.created_at}"

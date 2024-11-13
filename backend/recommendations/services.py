@@ -2,6 +2,8 @@ import google.generativeai as genai
 from django.conf import settings
 from django.core.cache import cache
 from .models import Recommendation, RecommendationType
+import logging
+logger = logging.getLogger(__name__)
 
 class GeminiService:
     def __init__(self):
@@ -104,6 +106,6 @@ class GeminiService:
             response = self.model.generate_content(prompt)
             return response.text
         except Exception as e:
-            print(f"Gemini API error: {str(e)}")
+            logger.error(f"Gemini API error: {str(e)}")
             return None
             
