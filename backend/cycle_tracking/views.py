@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import JSONRenderer
 
 from apps.accounts.services.firebase_backend import FirebaseAuthentication
 from .models import CycleTracking
@@ -23,6 +24,8 @@ class CycleTrackingViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.DjangoFilterBackend]
     filterset_fields = ['start_date', 'current_phase']
     ordering_fields = ['start_date', 'cycle_length']
+    renderer_classes = [JSONRenderer]
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
